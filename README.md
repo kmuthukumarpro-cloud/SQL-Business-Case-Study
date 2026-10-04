@@ -113,3 +113,317 @@ Calculate each product's contribution to total company revenue.
 ## Author
 
 Aspiring Data Analyst building projects in SQL and Power BI.
+
+## SQL Solutions
+
+/* =========================================================
+   SQL BUSINESS CASE STUDY PROJECT
+   Author: Aspiring Data Analyst
+   ========================================================= */
+
+
+/* =========================================================
+   01. TOTAL REVENUE
+   ========================================================= */
+
+SELECT
+    SUM(sales_amount) AS total_revenue
+FROM fact_sales;
+
+
+/* =========================================================
+   02. TOTAL CUSTOMERS
+   ========================================================= */
+
+SELECT
+    COUNT(DISTINCT customer_key) AS total_unique_customers
+FROM fact_sales;
+
+
+/* =========================================================
+   03. TOTAL ORDERS
+   ========================================================= */
+
+SELECT
+    COUNT(DISTINCT order_number) AS total_orders
+FROM fact_sales;
+
+
+/* =========================================================
+   04. TOP PRODUCT
+   ========================================================= */
+
+SELECT TOP 1
+    p.product_key,
+    p.product_name,
+    SUM(s.sales_amount) AS total_revenue
+FROM fact_sales s
+INNER JOIN dim_products p
+    ON p.product_key = s.product_key
+GROUP BY
+    p.product_key,
+    p.product_name
+ORDER BY total_revenue DESC;
+
+
+/* =========================================================
+   05. TOP CUSTOMER
+   ========================================================= */
+
+SELECT TOP 1
+    c.customer_key,
+    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+    SUM(s.sales_amount) AS total_revenue
+FROM fact_sales s
+INNER JOIN dim_customers c
+    ON c.customer_key = s.customer_key
+GROUP BY
+    c.customer_key,
+    c.first_name,
+    c.last_name
+ORDER BY total_revenue DESC;
+
+
+/* =========================================================
+   06. REVENUE BY COUNTRY
+   ========================================================= */
+
+SELECT
+    c.country,
+    SUM(s.sales_amount) AS total_revenue
+FROM fact_sales s
+INNER JOIN dim_customers c
+    ON c.customer_key = s.customer_key
+GROUP BY c.country
+ORDER BY total_revenue DESC;
+
+
+/* =========================================================
+   07. REVENUE BY MONTH
+   ========================================================= */
+
+SELECT
+    YEAR(order_date) AS order_year,
+    MONTH(order_date) AS order_month,
+    SUM(sales_amount) AS total_revenue
+FROM fact_sales
+GROUP BY
+    YEAR(order_date),
+    MONTH(order_date)
+ORDER BY
+    order_year,
+    order_month;
+
+
+/* =========================================================
+   08. AVERAGE ORDER VALUE
+   ========================================================= */
+
+SELECT
+    SUM(sales_amount) * 1.0 /
+    COUNT(DISTINCT order_number) AS avg_order_value
+FROM fact_sales;
+
+
+/* =========================================================
+   09. CUSTOMERS ABOVE AVERAGE SPEND
+   ========================================================= */
+
+WITH Customer_Total AS
+(
+    SELECT
+        customer_key,
+        SUM(sales_amount) AS total_spend
+    FROM fact_sales
+    GROUP BY customer_key
+)
+SELECT
+    customer_key,
+    total_spend
+FROM Customer_Total
+WHERE total_spend >
+(
+    SELECT AVG(total_spend)
+    FROM Customer_Total
+);
+
+
+/* =========================================================
+   10. PRODUCTS BELOW AVERAGE SALES
+   ========================================================= */
+
+WITH Product_Revenue AS
+(
+    SELECT
+        product_key,
+        SUM(sales_amount) AS total_product_revenue
+    FROM fact_sales
+    GROUP BY product_key
+)
+SELECT
+    product_key,
+    total_product_revenue
+FROM Product_Revenue
+WHERE total_product_revenue <
+(
+    SELECT AVG(total_product_revenue)
+    FROM Product_Revenue
+);
+
+
+/* =========================================================
+   11. RANK CUSTOMERS
+   ========================================================= */
+
+WITH Customer_Total AS
+(
+    SELECT
+        customer_key,
+        SUM(sales_amount) AS total_spending
+    FROM fact_sales
+    GROUP BY customer_key
+)
+SELECT
+    customer_key,
+    total_spending,
+    RANK() OVER
+    (
+        ORDER BY total_spending DESC
+    ) AS customer_rank
+FROM Customer_Total;
+
+
+/* =========================================================
+   12. TOP 3 PRODUCTS
+   ========================================================= */
+
+WITH Product_Revenue AS
+(
+    SELECT
+        product_key,
+        SUM(sales_amount) AS total_revenue
+    FROM fact_sales
+    GROUP BY product_key
+),
+Product_Rank AS
+(
+    SELECT
+        product_key,
+        total_revenue,
+        RANK() OVER
+        (
+            ORDER BY total_revenue DESC
+        ) AS product_rank
+    FROM Product_Revenue
+)
+SELECT *
+FROM Product_Rank
+WHERE product_rank <= 3;
+
+
+/* =========================================================
+   13. RUNNING TOTAL REVENUE
+   ========================================================= */
+
+WITH Revenue_Total AS
+(
+    SELECT
+        DATEFROMPARTS
+        (
+            YEAR(order_date),
+            MONTH(order_date),
+            1
+        ) AS revenue_month,
+        SUM(sales_amount) AS monthly_revenue
+    FROM fact_sales
+    GROUP BY
+        DATEFROMPARTS
+        (
+            YEAR(order_date),
+            MONTH(order_date),
+            1
+        )
+)
+SELECT
+    revenue_month,
+    monthly_revenue,
+    SUM(monthly_revenue)
+    OVER
+    (
+        ORDER BY revenue_month
+    ) AS running_revenue
+FROM Revenue_Total;
+
+
+/* =========================================================
+   14. MONTHLY GROWTH ANALYSIS
+   ========================================================= */
+
+WITH Current_Month AS
+(
+    SELECT
+        DATEFROMPARTS
+        (
+            YEAR(order_date),
+            MONTH(order_date),
+            1
+        ) AS revenue_month,
+        SUM(sales_amount) AS monthly_revenue
+    FROM fact_sales
+    GROUP BY
+        DATEFROMPARTS
+        (
+            YEAR(order_date),
+            MONTH(order_date),
+            1
+        )
+),
+Previous_Month AS
+(
+    SELECT
+        revenue_month,
+        monthly_revenue,
+        LAG(monthly_revenue)
+        OVER
+        (
+            ORDER BY revenue_month
+        ) AS previous_month_revenue
+    FROM Current_Month
+)
+SELECT
+    revenue_month,
+    monthly_revenue,
+    previous_month_revenue,
+    ROUND(
+        COALESCE(
+        (monthly_revenue - previous_month_revenue) * 100.0
+        / NULLIF(previous_month_revenue, 0),
+        0
+        ),
+        2
+    ) AS growth_pct
+FROM Previous_Month;
+
+
+/* =========================================================
+   15. REVENUE CONTRIBUTION PERCENTAGE
+   ========================================================= */
+
+WITH Product_Total AS
+(
+    SELECT
+        product_key,
+        SUM(sales_amount) AS total_amount
+    FROM fact_sales
+    GROUP BY product_key
+)
+SELECT
+    product_key,
+    total_amount,
+    ROUND
+    (
+        total_amount * 100.0
+        / SUM(total_amount) OVER (),
+        2
+    ) AS revenue_contribution_pct
+FROM Product_Total;

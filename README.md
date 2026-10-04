@@ -427,3 +427,12 @@ SELECT
         2
     ) AS revenue_contribution_pct
 FROM Product_Total;
+
+
+
+## Project Highlights
+
+- Analyzed sales performance using SQL Server.
+- Solved 15 business-focused SQL problems.
+- Used CTEs, Window Functions, Ranking Functions and Aggregations.
+- Performed customer, product and revenue analysis.
